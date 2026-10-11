@@ -262,6 +262,34 @@ object SoundParser {
         return PcmWav(rate, channels, samples)
     }
 
+    /**
+     * Linearly resample mono PCM16 to the target rate while preserving duration.
+     * The game bank's rate is authoritative; replacement WAVs may use common rates
+     * such as 22050 Hz and are converted before MS-ADPCM encoding.
+     */
+    private fun resampleMonoPcm(samples: ShortArray, sourceRate: Int, targetRate: Int): ShortArray {
+        require(sourceRate in 8000..192000) { "Unsupported source WAV sample rate: $sourceRate." }
+        require(targetRate in 8000..65535) { "Unsupported target sample rate: $targetRate." }
+        require(samples.isNotEmpty()) { "WAV contains no samples." }
+        if (sourceRate == targetRate) return samples
+        val outCount = kotlin.math.max(1, (samples.size.toDouble() * targetRate / sourceRate).roundToLongSafe())
+        val out = ShortArray(outCount)
+        for (i in out.indices) {
+            val sourcePos = i.toDouble() * sourceRate / targetRate
+            val left = sourcePos.toInt().coerceIn(0, samples.lastIndex)
+            val right = (left + 1).coerceAtMost(samples.lastIndex)
+            val frac = (sourcePos - left).coerceIn(0.0, 1.0)
+            val value = samples[left] * (1.0 - frac) + samples[right] * frac
+            out[i] = value.toInt().coerceIn(-32768, 32767).toShort()
+        }
+        return out
+    }
+
+    private fun Double.roundToLongSafe(): Int {
+        require(this.isFinite() && this <= Int.MAX_VALUE.toDouble()) { "Resampled WAV is too large." }
+        return kotlin.math.round(this).toInt()
+    }
+
     /** Encode mono PCM16 samples to standard MS-ADPCM blocks with fixed block size. */
     fun encodeMsAdpcmMono(samples: ShortArray, blockSize: Int): ByteArray {
         require(blockSize >= 8) { "MS-ADPCM block size must be at least 8 bytes." }
@@ -350,29 +378,4 @@ object SoundParser {
         require(pcm.channels == 1) { "Replacement WAV must be mono." }
         require(pcm.sampleRate == entry.rate) { "WAV sample rate (${pcm.sampleRate}) must match target (${entry.rate})." }
         val encoded = encodeMsAdpcmMono(pcm.samples, entry.blockSize)
-        require(encoded.isNotEmpty() && encoded.size % entry.blockSize == 0) { "Encoded audio does not align to target MS-ADPCM blocks." }
-
-        val sorted = bank.entries.sortedBy { it.audioRel }
-        val bodyStream = java.io.ByteArrayOutputStream()
-        val newRanges = mutableMapOf<Int, Pair<Long, Long>>()
-        for (e in sorted) {
-            while ((bodyStream.size() % 8) != 0) bodyStream.write(0)
-            val rel = bodyStream.size().toLong()
-            val raw = if (e.globalIndex == entry.globalIndex) encoded else {
-                require(e.audioAbs >= 0 && e.audioAbs + e.audioSize <= file.size) { "Existing audio range is invalid for #${e.globalIndex}." }
-                file.copyOfRange(e.audioAbs.toInt(), (e.audioAbs + e.audioSize).toInt())
-            }
-            newRanges[e.globalIndex] = rel to raw.size.toLong()
-            bodyStream.write(raw)
-        }
-        while ((bodyStream.size() % 8) != 0) bodyStream.write(0)
-        val rebuilt = bodyStream.toByteArray()
-        val bodyStart = bank.bodyOffset.toInt()
-        require(bodyStart >= 0 && bodyStart <= file.size) { "XWS body offset is invalid." }
-        val logicalLength = bodyStart.toLong() + rebuilt.size
-        val hasTrailingPad = bank.physicalSize > bank.logicalSize
-        if (hasTrailingPad) require(logicalLength <= bank.physicalSize) {
-            "Repacked XWS needs $logicalLength logical bytes but padded physical capacity is ${bank.physicalSize}."
-        }
-        require(logicalLength <= Int.MAX_VALUE) { "Repacked XWS exceeds supported file size." }
-        val physicalLength = if (hasTrailingPad) bank.physic
+        require(encoded.isNotEmpty() && encoded.size % entry.blockSize == 0) { "Encoded audio does not align to target MS-ADPC
