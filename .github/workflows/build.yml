@@ -40,8 +40,6 @@ jobs:
           cp SoundParserTest.kt app/src/test/java/com/ngsoundeditor/android/
           cp AndroidManifest.xml app/src/main/AndroidManifest.xml
           cp build.gradle.kts app/build.gradle.kts
-          cp settings.gradle.kts .
-          cp gradle.properties .
 
           python3 - <<'PY'
           from pathlib import Path
