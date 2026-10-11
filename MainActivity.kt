@@ -431,7 +431,6 @@ class MainActivity : Activity() {
             } else {
                 SoundParser.replaceEntryWithXwsRepack(original, bank, entry, wav)
             }
-            loadedBytes = updated
             pendingBankOutput = updated
             val baseName = queryName(currentUri ?: uri).substringBeforeLast('.', "soundbank")
             pendingBankName = "${baseName}_repacked.${if (bank.format.startsWith("SND")) "SND" else "xws"}"
@@ -466,6 +465,7 @@ class MainActivity : Activity() {
             val wav = contentResolver.openInputStream(uri)?.use { readLimited(it, 64L * 1024 * 1024) }
                 ?: throw IllegalStateException("Could not read replacement WAV.")
             val updated = SoundParser.replaceEntryWithWav(original, bank, entry, wav)
+            loadedBytes = updated
             pendingBankOutput = updated
             val baseName = queryName(currentUri ?: uri).substringBeforeLast('.', "soundbank")
             pendingBankName = "${baseName}_replaced.${if (bank.format.startsWith("SND")) "SND" else "xws"}"
