@@ -431,6 +431,7 @@ class MainActivity : Activity() {
             } else {
                 SoundParser.replaceEntryWithXwsRepack(original, bank, entry, wav)
             }
+            loadedBytes = updated
             pendingBankOutput = updated
             val baseName = queryName(currentUri ?: uri).substringBeforeLast('.', "soundbank")
             pendingBankName = "${baseName}_repacked.${if (bank.format.startsWith("SND")) "SND" else "xws"}"
