@@ -30,14 +30,39 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Extract project
+      - name: Prepare Android project
         run: |
-          mkdir android-src
-          unzip NGSoundEditorAndroid-prototype-v3.8.zip -d android-src
+          mkdir -p app/src/main/java/com/ngsoundeditor/android
+          mkdir -p app/src/test/java/com/ngsoundeditor/android
 
-      - name: Align Java and Kotlin JVM targets
-        working-directory: android-src
-        run: |
+          cp MainActivity.kt app/src/main/java/com/ngsoundeditor/android/
+          cp SoundParser.kt app/src/main/java/com/ngsoundeditor/android/
+          cp SoundParserTest.kt app/src/test/java/com/ngsoundeditor/android/
+          cp AndroidManifest.xml app/src/main/AndroidManifest.xml
+          cp build.gradle.kts app/build.gradle.kts
+          cp settings.gradle.kts .
+          cp gradle.properties .
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/ngsoundeditor/android/MainActivity.kt")
+          s = p.read_text()
+          n = s.count('type = "audio/wav"')
+          if n == 0:
+              print("No strict audio/wav filter found; source may already be fixed.")
+          else:
+              s = s.replace('type = "audio/wav"', 'type = "*/*"')
+              p.write_text(s)
+              print(f"Fixed {n} WAV picker filter(s).")
+          PY
+
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.6.1" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.20" apply false
+          }
+          EOF
+
           cat >> app/build.gradle.kts <<'EOF'
 
           android {
@@ -52,14 +77,12 @@ jobs:
           EOF
 
       - name: Run tests
-        working-directory: android-src
         run: gradle --no-daemon testDebugUnitTest
 
       - name: Build APK
-        working-directory: android-src
         run: gradle --no-daemon assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
           name: NG-Sound-Editor-Android
-          path: android-src/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
