@@ -1,4 +1,3 @@
-
 name: Build NG Sound Editor APK
 
 on:
@@ -24,7 +23,7 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - uses: android-actions/setup-android@v3      
+      - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
 
@@ -35,6 +34,22 @@ jobs:
         run: |
           mkdir android-src
           unzip NGSoundEditorAndroid-prototype-v3.8.zip -d android-src
+
+      - name: Align Java and Kotlin JVM targets
+        working-directory: android-src
+        run: |
+          cat >> app/build.gradle.kts <<'EOF'
+
+          android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          EOF
 
       - name: Run tests
         working-directory: android-src
@@ -48,4 +63,3 @@ jobs:
         with:
           name: NG-Sound-Editor-Android
           path: android-src/app/build/outputs/apk/debug/app-debug.apk
-          
